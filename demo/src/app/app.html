@@ -1,0 +1,1410 @@
+<div class="app-container">
+    <!-- Top Header with Actions -->
+    <header class="main-header">
+        <div class="logo-area">
+            <span class="neon-title">Notepad Workspace</span>
+        </div>
+
+        <div class="counters">
+            <div class="counter-item">
+                <span class="value">{{ getCounts().charCount }}</span>
+                <span class="label">Characters</span>
+            </div>
+            <div class="counter-item">
+                <span class="value">{{ getCounts().wordCount }}</span>
+                <span class="label">Words</span>
+            </div>
+        </div>
+
+        <div class="header-actions">
+            <button class="icon-action-btn" (click)="undo()" [disabled]="historyIndex <= 0" title="Undo">
+                <svg viewBox="0 0 24 24" width="20" height="20">
+                    <path fill="currentColor"
+                        d="M12.5,8C9.85,8 7.45,9 5.6,10.6L2,7V16H11L7.38,12.38C8.77,11.22 10.54,10.5 12.5,10.5C16.04,10.5 19.05,12.81 20.1,16L22.47,15.22C21.08,11.08 17.15,8 12.5,8Z" />
+                </svg>
+            </button>
+            <button class="icon-action-btn" (click)="redo()" [disabled]="historyIndex >= history.length - 1"
+                title="Redo">
+                <svg viewBox="0 0 24 24" width="20" height="20">
+                    <path fill="currentColor"
+                        d="M18.4,10.6C16.55,9 14.15,8 11.5,8C6.85,8 2.92,11.08 1.53,15.22L3.9,16C4.95,12.81 7.96,10.5 11.5,10.5C13.46,10.5 15.23,11.22 16.62,12.38L13,16H22V7L18.4,10.6Z" />
+                </svg>
+            </button>
+            <button class="icon-action-btn danger" (click)="clearNotepad()" title="Clear Notepad">
+                <svg viewBox="0 0 24 24" width="20" height="20">
+                    <path fill="currentColor"
+                        d="M19,4H15.5L14.5,3H9.5L8.5,4H5V6H19M6,19A2,2 0 0,0 8,21H16A2,2 0 0,0 18,19V7H6V19Z" />
+                </svg>
+            </button>
+        </div>
+    </header>
+
+    <!-- Split Screen Workspace -->
+    <div class="workspace-split">
+
+        <!-- 50% Notepad Area -->
+        <section class="panel notepad-panel" (click)="clearSelection()">
+            <div class="panel-header">
+                <h2>{{ isPreviewMode ? 'Preview Mode' : 'Notepad' }}</h2>
+                @if (selectedBlockId && !isPreviewMode) {
+                <span class="active-badge">Editing element</span>
+                }
+                <!-- Save Button: saves to Local Storage -->
+                <button class="save-doc-btn" [class.saved-flash]="saveSuccessFlash"
+                    (click)="$event.stopPropagation(); saveDocument()" title="Save Notepad to browser storage">
+                    @if (!saveSuccessFlash) {
+                    <svg viewBox="0 0 24 24" width="13" height="13" style="flex-shrink:0">
+                        <path fill="currentColor"
+                            d="M15,9H5V5H15M12,19A3,3 0 0,1 9,16A3,3 0 0,1 12,13A3,3 0 0,1 15,16A3,3 0 0,1 12,19M17,3H5C3.89,3 3,3.9 3,5V19A2,2 0 0,0 5,21H19A2,2 0 0,0 21,19V7L17,3Z" />
+                    </svg>
+                    Save
+                    } @else {
+                    <svg viewBox="0 0 24 24" width="13" height="13" style="flex-shrink:0">
+                        <path fill="currentColor" d="M21,7L9,19L3.5,13.5L4.91,12.09L9,16.17L19.59,5.59L21,7Z" />
+                    </svg>
+                    Saved!
+                    }
+                </button>
+                <!-- Preview Button: toggles preview mode and opens new tab -->
+                <button class="preview-doc-btn" [class.preview-active]="isPreviewMode"
+                    (click)="$event.stopPropagation(); togglePreview()"
+                    [title]="isPreviewMode ? 'Close Preview Panel' : 'Preview Latest Saved File'">
+                    <svg viewBox="0 0 24 24" width="13" height="13" style="flex-shrink:0">
+                        <path fill="currentColor"
+                            d="M12,9A3,3 0 0,0 9,12A3,3 0 0,0 12,15A3,3 0 0,0 15,12A3,3 0 0,0 12,9M12,17A5,5 0 0,1 7,12A5,5 0 0,1 12,7A5,5 0 0,1 17,12A5,5 0 0,1 12,17M12,4.5C7,4.5 2.73,7.61 1,12C2.73,16.39 7,19.5 12,19.5C17,19.5 21.27,16.39 23,12C21.27,7.61 17,4.5 12,4.5Z" />
+                    </svg>
+                    {{ isPreviewMode ? 'Close Preview' : 'Preview' }}
+                </button>
+            </div>
+
+            <!-- Save Success Toast Notification -->
+            @if (showSaveToast) {
+            <div class="save-toast" role="alert" aria-live="polite">
+                <svg viewBox="0 0 24 24" width="16" height="16" style="flex-shrink:0">
+                    <path fill="currentColor" d="M21,7L9,19L3.5,13.5L4.91,12.09L9,16.17L19.59,5.59L21,7Z" />
+                </svg>
+                File saved successfully.
+            </div>
+            }
+
+            <div class="notepad-scroll-container">
+                <!-- Main canvas drop zone (Editor is always visible) -->
+                <div id="notepad-canvas" cdkDropList [cdkDropListData]="notepadItems"
+                    [cdkDropListConnectedTo]="getConnectedListIds()" (cdkDropListDropped)="onDrop($event)"
+                    class="notepad-canvas-area">
+
+                    @for (item of notepadItems; track item.id) {
+                    <div cdkDrag [cdkDragData]="item" class="notepad-item-wrapper"
+                        [class.selected]="selectedBlockId === item.id" (click)="selectBlock($event, item.id)">
+
+                        <!-- Drag placeholder -->
+                        <div class="cdk-drag-placeholder" *cdkDragPlaceholder></div>
+
+                        <!-- Item Toolbar (shows when selected) -->
+                        @if (selectedBlockId === item.id) {
+                        <div class="item-toolbar">
+                            <div class="drag-handle" cdkDragHandle>
+                                <svg viewBox="0 0 24 24" width="16" height="16">
+                                    <path fill="currentColor"
+                                        d="M10,4A2,2 0 0,1 12,6A2,2 0 0,1 10,8A2,2 0 0,1 8,6A2,2 0 0,1 10,4M14,4A2,2 0 0,1 16,6A2,2 0 0,1 14,8A2,2 0 0,1 12,6A2,2 0 0,1 14,4M10,10A2,2 0 0,1 12,12A2,2 0 0,1 10,14A2,2 0 0,1 8,12A2,2 0 0,1 10,10M14,10A2,2 0 0,1 16,12A2,2 0 0,1 14,14A2,2 0 0,1 12,12A2,2 0 0,1 14,10M10,16A2,2 0 0,1 12,18A2,2 0 0,1 10,20A2,2 0 0,1 8,18A2,2 0 0,1 10,16M14,16A2,2 0 0,1 16,18A2,2 0 0,1 14,20A2,2 0 0,1 12,18A2,2 0 0,1 14,16Z" />
+                                </svg>
+                            </div>
+                            <span class="item-type-tag">{{ item.type | uppercase }}</span>
+
+                            <!-- Element specific quick settings -->
+                            @if (item.type === 'heading') {
+                            <select [ngModel]="item.settings.headingLevel"
+                                (ngModelChange)="item.settings.headingLevel = $event; saveState()" class="inline-select"
+                                (click)="$event.stopPropagation()">
+                                <option value="h1">H1</option>
+                                <option value="h2">H2</option>
+                                <option value="h3">H3</option>
+                                <option value="h4">H4</option>
+                                <option value="h5">H5</option>
+                                <option value="h6">H6</option>
+                            </select>
+                            }
+                            @if (item.type === 'button') {
+                            <div class="color-picker-inline" (click)="$event.stopPropagation()">
+                                <button (click)="item.settings.buttonColor = 'red'; saveState()" class="color-dot red"
+                                    [class.active]="item.settings.buttonColor === 'red'"></button>
+                                <button (click)="item.settings.buttonColor = 'yellow'; saveState()"
+                                    class="color-dot yellow"
+                                    [class.active]="item.settings.buttonColor === 'yellow'"></button>
+                                <button (click)="item.settings.buttonColor = 'green'; saveState()"
+                                    class="color-dot green"
+                                    [class.active]="item.settings.buttonColor === 'green'"></button>
+                            </div>
+                            }
+                            @if (item.type === 'divider') {
+                            <select [ngModel]="item.settings.dividerLayout"
+                                (ngModelChange)="changeDividerLayout(item, $event, $event === '25-25-25-25' ? 4 : $event === '100' ? 1 : 2)"
+                                class="inline-select" (click)="$event.stopPropagation()">
+                                <option value="100">100%</option>
+                                <option value="50-50">50% — 50%</option>
+                                <option value="60-40">60% — 40%</option>
+                                <option value="70-30">70% — 30%</option>
+                                <option value="25-25-25-25">25%x4</option>
+                            </select>
+                            }
+
+                            <button class="delete-btn" (click)="deleteBlock($event, item.id)">
+                                <svg viewBox="0 0 24 24" width="16" height="16">
+                                    <path fill="currentColor"
+                                        d="M19,4H15.5L14.5,3H9.5L8.5,4H5V6H19M6,19A2,2 0 0,0 8,21H16A2,2 0 0,0 18,19V7H6V19Z" />
+                                </svg>
+                            </button>
+                        </div>
+                        }
+
+                        <ng-container *ngTemplateOutlet="itemRenderer; context: { item: item }"></ng-container>
+                    </div>
+                    }
+
+                    @if (notepadItems.length === 0) {
+                    <div class="empty-state">
+                        <svg class="empty-icon" viewBox="0 0 24 24" width="48" height="48">
+                            <path fill="currentColor"
+                                d="M14,2H6A2,2 0 0,0 4,4V20A2,2 0 0,0 6,21H18A2,2 0 0,0 20,19V8L14,2M13,9V3.5L18.5,9H13M12,18H8V16H12V18M16,14H8V12H16V14M16,10H8V8H10V10H16Z" />
+                        </svg>
+                        <h3>Your Notepad is Empty</h3>
+                        <p>start your creativity.</p>
+                    </div>
+                    }
+                </div>
+            </div>
+        </section>
+
+        <!-- 30% Features / Tools Display Panel -->
+        <section class="panel features-panel">
+            <div class="panel-header">
+                @if (isPreviewMode) {
+                <h2>Saved Files</h2>
+                <button class="preview-close-btn" (click)="closePreview()" title="Close Saved Files">
+                    <svg viewBox="0 0 24 24" width="16" height="16">
+                        <path fill="currentColor"
+                            d="M19,6.41L17.59,5L12,10.59L6.41,5L5,6.41L10.59,12L5,17.59L6.41,19L12,13.41L17.59,19L19,17.59L13.41,12L19,6.41Z" />
+                    </svg>
+                </button>
+                } @else {
+                <h2>{{ activeTab | titlecase }} Features</h2>
+                }
+            </div>
+
+            <div class="features-scroll-container">
+
+                <!-- ─── Saved Files List in 30% Panel (Only File Entries, No Inputs, No Document Content) ─── -->
+                @if (isPreviewMode) {
+                <div class="preview-panel-container">
+                    @if (savedSnapshots.length === 0) {
+                    <div class="preview-empty-state">
+                        <svg viewBox="0 0 24 24" width="44" height="44" style="opacity:0.35">
+                            <path fill="currentColor"
+                                d="M14,2H6A2,2 0 0,0 4,4V20A2,2 0 0,0 6,21H18A2,2 0 0,0 20,19V8L14,2M13,9V3.5L18.5,9H13M12,18H8V16H12V18M16,14H8V12H16V14M16,10H8V8H10V10H16Z" />
+                        </svg>
+                        <p class="preview-empty-title">No Saved Files Found</p>
+                        <p class="preview-empty-hint">Click the <strong>Save</strong> button in the Notepad header to
+                            store your content in Local Storage.</p>
+                    </div>
+                    } @else {
+
+                    <div class="preview-history-header">
+                        <span class="preview-section-title">Saved Files ({{ savedSnapshots.length }})</span>
+                        <span class="preview-hint-chip">Click to Open</span>
+                    </div>
+                    <p class="preview-instructions">Select a file below to open and load its content into the Notepad.
+                    </p>
+
+                    <!-- List of Saved File Entries Only (No Content, No Text, No Inputs) -->
+                    <div class="snapshot-list">
+                        @for (snap of savedSnapshots; track snap.id) {
+                        <div class="snapshot-entry" (click)="previewSnapshotInNewTab(snap)"
+                            title="Click to preview this file in a new tab">
+                            <div class="snap-file-icon">
+                                <svg viewBox="0 0 24 24" width="18" height="18">
+                                    <path fill="currentColor"
+                                        d="M14,2H6A2,2 0 0,0 4,4V20A2,2 0 0,0 6,21H18A2,2 0 0,0 20,19V8L14,2M13,9V3.5L18.5,9H13M12,18H8V16H12V18M16,14H8V12H16V14M16,10H8V8H10V10H16Z" />
+                                </svg>
+                            </div>
+                            <div class="snap-meta">
+                                <span class="snap-label">{{ snap.label }}</span>
+                            </div>
+                            <div class="snap-actions">
+                                <button class="snap-open-btn"
+                                    (click)="$event.stopPropagation(); loadSnapshotIntoEditor(snap)"
+                                    title="Load into Notepad Editor">
+                                    Load
+                                </button>
+                                <button class="snap-delete-btn"
+                                    (click)="$event.stopPropagation(); deleteSnapshot(snap.id)"
+                                    title="Delete saved file">
+                                    <svg viewBox="0 0 24 24" width="13" height="13">
+                                        <path fill="currentColor"
+                                            d="M19,6.41L17.59,5L12,10.59L6.41,5L5,6.41L10.59,12L5,17.59L6.41,19L12,13.41L17.59,19L19,17.59L13.41,12L19,6.41Z" />
+                                    </svg>
+                                </button>
+                            </div>
+                        </div>
+                        }
+                    </div>
+                    }
+                </div>
+                } @else { <!-- Tab Content: Content Draggable Tools -->
+                @if (activeTab === 'content') {
+                <div class="content-tools-grid" id="features-list" cdkDropList [cdkDropListData]="contentTools"
+                    [cdkDropListConnectedTo]="getConnectedListIds()" [cdkDropListSortingDisabled]="true">
+
+                    @for (tool of contentTools; track tool.type) {
+                    <div cdkDrag [cdkDragData]="tool.type" (click)="addToolItem(tool.type)"
+                        class="tool-button rainbow-neon-btn"
+                        [class.tool-btn-disabled]="tool.type === 'column' && hasColumnBlock"
+                        [title]="tool.type === 'column' && hasColumnBlock ? 'Only one Column block allowed at a time' : tool.label">
+                        <span class="tool-label">{{ tool.label }}</span>
+
+                        <!-- CDK Drag Preview -->
+                        <div *cdkDragPreview class="tool-button rainbow-neon-btn dragging-preview">
+                            {{ tool.label }}
+                        </div>
+
+                        <!-- Placeholder while dragging -->
+                        <div *cdkDragPlaceholder class="tool-button-placeholder"></div>
+                    </div>
+                    }
+                </div>
+                }
+
+                <!-- Tab Content: Block Grid Split Tools -->
+                @if (activeTab === 'block') {
+                <div class="block-tools-list">
+
+                    @if (selectedItem?.type === 'divider' && selectedItem?.settings?.isColumnBlock) {
+                    <!-- ─── Change Column Layout Mode ─── -->
+                    <div class="column-mode-banner">
+                        <div class="column-mode-info">
+                            <span class="column-mode-icon">🗂</span>
+                            <span>Change Column Layout</span>
+                        </div>
+                    </div>
+
+                    <p class="section-desc column-mode-hint">Select a new layout below to update your column structure.
+                        Data will be safely retained.</p>
+
+                    <div class="layout-buttons-stack column-layout-stack" style="margin-bottom: 20px;">
+                        @for (layout of blockLayouts; track layout.layout) {
+                        <div class="layout-split-btn block-tool-item column-layout-item"
+                            [class.active-layout]="selectedItem!.settings.dividerLayout === layout.layout"
+                            (click)="changeDividerLayout(selectedItem!, layout.layout, layout.cols)">
+                            <span class="layout-title">{{ layout.label }}</span>
+                            <div class="mini-layout-preview">
+                                <span *ngFor="let col of [].constructor(layout.cols)" class="mini-col"></span>
+                            </div>
+                        </div>
+                        }
+                    </div>
+                    } @else {
+
+                    <!-- ─── Regular Block mode ─── -->
+                    <p class="section-desc">Select or drag split layout tools to create structured layout grids.</p>
+                    <div class="layout-buttons-stack" id="block-tools-list" cdkDropList [cdkDropListData]="blockLayouts"
+                        [cdkDropListConnectedTo]="getConnectedListIds()" [cdkDropListSortingDisabled]="true">
+                        @for (layout of blockLayouts; track layout.layout) {
+                        <div cdkDrag [cdkDragData]="{ type: 'divider', layout: layout.layout, cols: layout.cols }"
+                            class="layout-split-btn block-tool-item"
+                            (click)="addBlockSplit(layout.layout, layout.cols)">
+                            <span class="layout-title">{{ layout.label }}</span>
+                            <div class="mini-layout-preview">
+                                <span *ngFor="let col of [].constructor(layout.cols)" class="mini-col"></span>
+                            </div>
+
+                            <!-- CDK Drag Preview -->
+                            <div *cdkDragPreview class="layout-split-btn block-tool-item dragging-preview">
+                                <span class="layout-title">{{ layout.label }}</span>
+                            </div>
+                            <div *cdkDragPlaceholder class="tool-button-placeholder"></div>
+                        </div>
+                        }
+                    </div>
+                    }
+
+                </div>
+                }
+
+                <!-- Tab Content: Body Formatting Options -->
+                @if (activeTab === 'body') {
+                <div class="body-tools-editor">
+                    @if (selectedItem) {
+                    <div class="editing-item-indicator">
+                        <span>Selected: <strong>{{ selectedItem.type | uppercase }}</strong></span>
+                    </div>
+
+                    <!-- Button Specific Body Feature Controls -->
+                    @if (selectedItem.type === 'button') {
+                    <div class="button-feature-card">
+                        <h4>Body Button Controls</h4>
+
+                        <div class="setting-row">
+                            <label>Button Text</label>
+                            <input type="text" [ngModel]="selectedItem.content"
+                                (ngModelChange)="updateContent(selectedItem, $event)" class="form-input"
+                                placeholder="Button Text">
+                        </div>
+
+                        <div class="setting-row-group">
+                            <label>Button Theme Presets</label>
+                            <div class="color-picker-inline body-preset-row">
+                                <button (click)="selectedItem.settings.buttonColor = 'red'; saveState()"
+                                    class="color-dot red" [class.active]="selectedItem.settings.buttonColor === 'red'"
+                                    title="Red Theme"></button>
+                                <button (click)="selectedItem.settings.buttonColor = 'yellow'; saveState()"
+                                    class="color-dot yellow"
+                                    [class.active]="selectedItem.settings.buttonColor === 'yellow'"
+                                    title="Yellow Theme"></button>
+                                <button (click)="selectedItem.settings.buttonColor = 'green'; saveState()"
+                                    class="color-dot green"
+                                    [class.active]="selectedItem.settings.buttonColor === 'green'"
+                                    title="Green Theme"></button>
+                                <button (click)="selectedItem.settings.buttonColor = 'blue'; saveState()"
+                                    class="color-dot blue" [class.active]="selectedItem.settings.buttonColor === 'blue'"
+                                    title="Blue Theme"></button>
+                                <button (click)="selectedItem.settings.buttonColor = 'purple'; saveState()"
+                                    class="color-dot purple"
+                                    [class.active]="selectedItem.settings.buttonColor === 'purple'"
+                                    title="Purple Theme"></button>
+                            </div>
+                        </div>
+
+                        <div class="setting-row">
+                            <label>Border Radius: {{ selectedItem.settings.borderRadius || 25 }}px</label>
+                            <input type="range" min="0" max="40" [ngModel]="selectedItem.settings.borderRadius || 25"
+                                (ngModelChange)="selectedItem.settings.borderRadius = $event; saveState()"
+                                class="slider-control">
+                        </div>
+
+                        <div class="setting-row">
+                            <label>Button Padding: {{ selectedItem.settings.padding || 10 }}px</label>
+                            <input type="range" min="4" max="30" [ngModel]="selectedItem.settings.padding || 10"
+                                (ngModelChange)="selectedItem.settings.padding = $event; saveState()"
+                                class="slider-control">
+                        </div>
+
+                        <div class="setting-row">
+                            <label>Target URL / Link</label>
+                            <input type="text" [ngModel]="selectedItem.settings.buttonUrl || ''"
+                                (ngModelChange)="selectedItem.settings.buttonUrl = $event; saveState()"
+                                class="form-input" placeholder="https://example.com">
+                        </div>
+                    </div>
+                    }
+
+                    <!-- Icon Specific Body Feature Controls (Available Icons + Adjustments) -->
+                    @if (selectedItem.type === 'icon') {
+                    <div class="button-feature-card icon-feature-card">
+                        <h4>✨ Select & Customize Icon</h4>
+
+                        <!-- Available Icons Palette (10 Icons) -->
+                        <div class="setting-row-group">
+                            <label>Select Icon</label>
+                            <div class="icon-picker-grid">
+                                @for (ico of availableIcons; track ico.name) {
+                                <button type="button" class="icon-picker-btn"
+                                    [class.active]="selectedItem.content === ico.symbol"
+                                    (click)="selectIconSymbol(selectedItem, ico.symbol)" [title]="ico.label">
+                                    <span class="icon-picker-symbol">{{ ico.symbol }}</span>
+                                    <span class="icon-picker-name">{{ ico.name }}</span>
+                                </button>
+                                }
+                            </div>
+                        </div>
+
+                        <!-- Icon Size Control (Small to Large) -->
+                        <div class="setting-row">
+                            <div class="setting-label-row">
+                                <label>Icon Size: {{ selectedItem.settings.iconSize || 36 }}px</label>
+                                <span class="size-badge">{{ (selectedItem.settings.iconSize || 36) < 28 ? 'Small' :
+                                        (selectedItem.settings.iconSize || 36)> 64 ? 'Large' : 'Medium' }}</span>
+                            </div>
+                            <input type="range" min="14" max="110" step="2"
+                                [ngModel]="selectedItem.settings.iconSize || 36" (ngModelChange)="setIconSize($event)"
+                                class="slider-control">
+                        </div>
+
+                        <!-- Icon Width / Container Width Control -->
+                        <div class="setting-row">
+                            <label>Icon Container Width: {{ selectedItem.settings.iconWidth || 100 }}%</label>
+                            <input type="range" min="10" max="100" step="5"
+                                [ngModel]="selectedItem.settings.iconWidth || 100"
+                                (ngModelChange)="setIconWidth($event)" class="slider-control">
+                        </div>
+
+                        <!-- Bold / Thickness Control -->
+                        <div class="setting-row-group">
+                            <label>Bold / Thickness</label>
+                            <div class="btn-group-toggle weight-toggle-group">
+                                <button type="button" class="toggle-btn"
+                                    [class.active]="(selectedItem.settings.iconWeight || 700) === 300"
+                                    (click)="setIconWeight(300)">Light</button>
+                                <button type="button" class="toggle-btn"
+                                    [class.active]="(selectedItem.settings.iconWeight || 700) === 400"
+                                    (click)="setIconWeight(400)">Regular</button>
+                                <button type="button" class="toggle-btn"
+                                    [class.active]="(selectedItem.settings.iconWeight || 700) === 700"
+                                    (click)="setIconWeight(700)">Bold</button>
+                                <button type="button" class="toggle-btn"
+                                    [class.active]="(selectedItem.settings.iconWeight || 700) === 900"
+                                    (click)="setIconWeight(900)">Heavy</button>
+                            </div>
+                        </div>
+                    </div>
+                    }
+
+                    <!-- Social Specific Body Feature Controls -->
+                    @if (selectedItem.type === 'social') {
+                    <div class="button-feature-card social-feature-card">
+                        <h4>📱 Social Links & Styling</h4>
+
+                        <!-- Google Settings -->
+                        <div class="setting-row">
+                            <label>Google URL</label>
+                            <input type="text" [ngModel]="selectedItem.content.google || 'https://www.google.com'"
+                                (ngModelChange)="selectedItem.content.google = $event; saveState()" class="form-input"
+                                placeholder="https://www.google.com">
+                        </div>
+
+                        <div class="setting-row">
+                            <label>Google Link Display Text</label>
+                            <input type="text"
+                                [ngModel]="selectedItem.content.googleText !== undefined ? selectedItem.content.googleText : 'Google'"
+                                (ngModelChange)="selectedItem.content.googleText = $event; saveState()"
+                                class="form-input" placeholder="Google">
+                        </div>
+
+                        <div class="setting-row">
+                            <label>Google Display Style</label>
+                            <div class="btn-group-toggle">
+                                <button type="button" class="toggle-btn"
+                                    [class.active]="!selectedItem.settings.showGoogleLinkText"
+                                    (click)="selectedItem.settings.showGoogleLinkText = false; saveState()">
+                                    Icon Only
+                                </button>
+                                <button type="button" class="toggle-btn"
+                                    [class.active]="selectedItem.settings.showGoogleLinkText"
+                                    (click)="selectedItem.settings.showGoogleLinkText = true; saveState()">
+                                    Icon + Text Link
+                                </button>
+                            </div>
+                        </div>
+
+                        <!-- WhatsApp Settings -->
+                        <div class="setting-row">
+                            <label>WhatsApp Link / Number</label>
+                            <input type="text" [ngModel]="selectedItem.content.whatsapp || 'https://wa.me/'"
+                                (ngModelChange)="selectedItem.content.whatsapp = $event; saveState()" class="form-input"
+                                placeholder="https://wa.me/1234567890">
+                        </div>
+
+                        <div class="setting-row">
+                            <label>WhatsApp Link Display Text</label>
+                            <input type="text"
+                                [ngModel]="selectedItem.content.whatsappText !== undefined ? selectedItem.content.whatsappText : 'WhatsApp'"
+                                (ngModelChange)="selectedItem.content.whatsappText = $event; saveState()"
+                                class="form-input" placeholder="WhatsApp">
+                        </div>
+
+                        <div class="setting-row">
+                            <label>WhatsApp Display Style</label>
+                            <div class="btn-group-toggle">
+                                <button type="button" class="toggle-btn"
+                                    [class.active]="!selectedItem.settings.showWhatsappLinkText"
+                                    (click)="selectedItem.settings.showWhatsappLinkText = false; saveState()">
+                                    Icon Only
+                                </button>
+                                <button type="button" class="toggle-btn"
+                                    [class.active]="selectedItem.settings.showWhatsappLinkText"
+                                    (click)="selectedItem.settings.showWhatsappLinkText = true; saveState()">
+                                    Icon + Text Link
+                                </button>
+                            </div>
+                        </div>
+
+                        <!-- Instagram Settings -->
+                        <div class="setting-row">
+                            <label>Instagram URL</label>
+                            <input type="text" [ngModel]="selectedItem.content.instagram || 'https://instagram.com/'"
+                                (ngModelChange)="selectedItem.content.instagram = $event; saveState()"
+                                class="form-input" placeholder="https://instagram.com/username">
+                        </div>
+
+                        <div class="setting-row">
+                            <label>Instagram Link Display Text</label>
+                            <input type="text"
+                                [ngModel]="selectedItem.content.instagramText !== undefined ? selectedItem.content.instagramText : 'Instagram'"
+                                (ngModelChange)="selectedItem.content.instagramText = $event; saveState()"
+                                class="form-input" placeholder="Instagram">
+                        </div>
+
+                        <div class="setting-row">
+                            <label>Instagram Display Style</label>
+                            <div class="btn-group-toggle">
+                                <button type="button" class="toggle-btn"
+                                    [class.active]="!selectedItem.settings.showInstagramLinkText"
+                                    (click)="selectedItem.settings.showInstagramLinkText = false; saveState()">
+                                    Icon Only
+                                </button>
+                                <button type="button" class="toggle-btn"
+                                    [class.active]="selectedItem.settings.showInstagramLinkText"
+                                    (click)="selectedItem.settings.showInstagramLinkText = true; saveState()">
+                                    Icon + Text Link
+                                </button>
+                            </div>
+                        </div>
+
+                        <!-- Facebook Settings -->
+                        <div class="setting-row">
+                            <label>Facebook URL</label>
+                            <input type="text" [ngModel]="selectedItem.content.facebook || 'https://facebook.com/'"
+                                (ngModelChange)="selectedItem.content.facebook = $event; saveState()" class="form-input"
+                                placeholder="https://facebook.com/username">
+                        </div>
+
+                        <div class="setting-row">
+                            <label>Facebook Link Display Text</label>
+                            <input type="text"
+                                [ngModel]="selectedItem.content.facebookText !== undefined ? selectedItem.content.facebookText : 'Facebook'"
+                                (ngModelChange)="selectedItem.content.facebookText = $event; saveState()"
+                                class="form-input" placeholder="Facebook">
+                        </div>
+
+                        <div class="setting-row">
+                            <label>Facebook Display Style</label>
+                            <div class="btn-group-toggle">
+                                <button type="button" class="toggle-btn"
+                                    [class.active]="!selectedItem.settings.showFacebookLinkText"
+                                    (click)="selectedItem.settings.showFacebookLinkText = false; saveState()">
+                                    Icon Only
+                                </button>
+                                <button type="button" class="toggle-btn"
+                                    [class.active]="selectedItem.settings.showFacebookLinkText"
+                                    (click)="selectedItem.settings.showFacebookLinkText = true; saveState()">
+                                    Icon + Text Link
+                                </button>
+                            </div>
+                        </div>
+
+                        <div class="setting-row">
+                            <label>Icon Size: {{ selectedItem.settings.socialIconSize || 34 }}px</label>
+                            <input type="range" min="20" max="60" step="2"
+                                [ngModel]="selectedItem.settings.socialIconSize || 34"
+                                (ngModelChange)="setSocialIconSize($event)" class="slider-control">
+                        </div>
+
+                        <div class="setting-row">
+                            <label>Icon Gap / Spacing: {{ selectedItem.settings.socialGap || 16 }}px</label>
+                            <input type="range" min="6" max="40" step="2"
+                                [ngModel]="selectedItem.settings.socialGap || 16" (ngModelChange)="setSocialGap($event)"
+                                class="slider-control">
+                        </div>
+                    </div>
+                    }
+
+                    <!-- Draw Specific Body Feature Controls -->
+                    @if (selectedItem.type === 'draw') {
+                    <div class="button-feature-card draw-feature-card">
+                        <h4>✏️ Drawing Tools</h4>
+
+                        <!-- Tool Toggle (Pen / Brush / Eraser) -->
+                        <div class="setting-row-group">
+                            <label>Active Tool</label>
+                            <div class="btn-group-toggle">
+                                <button type="button" class="toggle-btn"
+                                    [class.active]="(selectedItem.settings.drawTool || 'pen') === 'pen'"
+                                    (click)="setDrawTool('pen')">🖊 Pen</button>
+                                <button type="button" class="toggle-btn"
+                                    [class.active]="selectedItem.settings.drawTool === 'brush'"
+                                    (click)="setDrawTool('brush')">🖌 Brush</button>
+                                <button type="button" class="toggle-btn"
+                                    [class.active]="selectedItem.settings.drawTool === 'eraser'"
+                                    (click)="setDrawTool('eraser')">⬜ Eraser</button>
+                            </div>
+                        </div>
+
+                        <!-- Pen Color -->
+                        <div class="setting-row">
+                            <label>Pen Color</label>
+                            <div class="color-picker-row">
+                                <input type="color" [ngModel]="selectedItem.settings.drawColor || '#ff1493'"
+                                    (ngModelChange)="setDrawColor($event)" class="color-picker-input">
+                                <span class="color-hex">{{ selectedItem.settings.drawColor || '#ff1493' }}</span>
+                            </div>
+                        </div>
+
+                        <!-- Line Thickness -->
+                        <div class="setting-row">
+                            <label>Thickness: {{ selectedItem.settings.drawThickness || 3 }}px</label>
+                            <input type="range" min="1" max="50" step="1"
+                                [ngModel]="selectedItem.settings.drawThickness || 3"
+                                (ngModelChange)="setDrawThickness($event)" class="slider-control">
+                        </div>
+
+                        <!-- Canvas Width -->
+                        <div class="setting-row">
+                            <label>Canvas Width: {{ selectedItem.settings.drawCanvasWidth || 100 }}%</label>
+                            <input type="range" min="20" max="100" step="5"
+                                [ngModel]="selectedItem.settings.drawCanvasWidth || 100"
+                                (ngModelChange)="setDrawCanvasWidth($event)" class="slider-control">
+                        </div>
+
+                        <!-- Actions: Clear / Undo / Redo -->
+                        <div class="draw-actions-row">
+                            <button class="draw-action-btn undo-btn" (click)="undoDraw(selectedItem)"
+                                [disabled]="!canUndoDraw(selectedItem)" title="Undo last stroke">↩ Undo</button>
+                            <button class="draw-action-btn redo-btn" (click)="redoDraw(selectedItem)"
+                                [disabled]="!canRedoDraw(selectedItem)" title="Redo">↪ Redo</button>
+                            <button class="draw-action-btn clear-btn" (click)="clearDraw(selectedItem)"
+                                title="Clear canvas">🗑 Clear</button>
+                        </div>
+                    </div>
+                    }
+
+                    <!-- Heading Specific Body Feature Controls -->
+                    @if (selectedItem.type === 'heading') {
+                    <div class="button-feature-card">
+                        <h4>Heading Text</h4>
+                        <div class="setting-row">
+                            <label>Content Text</label>
+                            <input type="text" [ngModel]="selectedItem.content"
+                                (ngModelChange)="updateContent(selectedItem, $event)" class="form-input"
+                                placeholder="Heading Text">
+                        </div>
+                    </div>
+                    }
+
+
+
+                    <!-- Divide Line & List Formatting Controls -->
+                    @if (selectedItem.type === 'divide') {
+                    <div class="button-feature-card line-list-feature-card">
+                        <h4>🖊 Line & List Formatting</h4>
+
+                        <!-- Mode Selector: Horizontal Line vs List Formatting -->
+                        <div class="setting-row">
+                            <label>Format Type</label>
+                            <div class="mode-toggle-group">
+                                <button type="button" class="mode-toggle-btn"
+                                    [class.active]="!selectedItem.settings.listStyle || selectedItem.settings.listStyle === 'none'"
+                                    (click)="setListStyle(selectedItem, 'none')">
+                                    ― Horizontal Line
+                                </button>
+                                <button type="button" class="mode-toggle-btn"
+                                    [class.active]="selectedItem.settings.listStyle && selectedItem.settings.listStyle !== 'none'"
+                                    (click)="setListStyle(selectedItem, selectedItem.settings.listStyle && selectedItem.settings.listStyle !== 'none' ? selectedItem.settings.listStyle : 'bullet')">
+                                    ☰ List Format
+                                </button>
+                            </div>
+                        </div>
+
+                        <!-- ── Horizontal Line Settings ── -->
+                        @if (!selectedItem.settings.listStyle || selectedItem.settings.listStyle === 'none') {
+                        <!-- Line Color -->
+                        <div class="setting-row">
+                            <label>Line Color</label>
+                            <div class="color-picker-row">
+                                <input type="color" [ngModel]="selectedItem.settings.lineColor || '#ff1493'"
+                                    (ngModelChange)="selectedItem.settings.lineColor = $event; saveState()"
+                                    class="color-picker-input">
+                                <span class="color-hex">{{ selectedItem.settings.lineColor || '#ff1493' }}</span>
+                            </div>
+                        </div>
+
+                        <!-- Line Width -->
+                        <div class="setting-row">
+                            <label>Line Width: {{ selectedItem.settings.lineWidth ?? 2 }}px</label>
+                            <input type="range" min="0" max="8" step="1"
+                                [ngModel]="selectedItem.settings.lineWidth ?? 2"
+                                (ngModelChange)="selectedItem.settings.lineWidth = +$event; saveState()"
+                                class="slider-control">
+                        </div>
+
+                        <!-- Line Style -->
+                        <div class="setting-row">
+                            <label>Line Style</label>
+                            <div class="divide-style-group">
+                                <button class="divide-style-btn"
+                                    [class.active]="(selectedItem.settings.lineStyle || 'solid') === 'solid'"
+                                    (click)="selectedItem.settings.lineStyle = 'solid'; saveState()">
+                                    Solid
+                                </button>
+                                <button class="divide-style-btn"
+                                    [class.active]="selectedItem.settings.lineStyle === 'dashed'"
+                                    (click)="selectedItem.settings.lineStyle = 'dashed'; saveState()">
+                                    Dashed
+                                </button>
+                                <button class="divide-style-btn"
+                                    [class.active]="selectedItem.settings.lineStyle === 'dotted'"
+                                    (click)="selectedItem.settings.lineStyle = 'dotted'; saveState()">
+                                    Dotted
+                                </button>
+                            </div>
+                        </div>
+
+                        <!-- Live Preview -->
+                        <div class="setting-row">
+                            <label>Live Preview</label>
+                            <div class="divide-line-preview">
+                                <hr class="divide-preview-hr"
+                                    [style.border-top-color]="selectedItem.settings.lineColor || '#ff1493'"
+                                    [style.border-top-width.px]="selectedItem.settings.lineWidth ?? 2"
+                                    [style.border-top-style]="selectedItem.settings.lineStyle || 'solid'"
+                                    [style.border-bottom]="'none'" [style.border-left]="'none'"
+                                    [style.border-right]="'none'" [style.height]="'0'">
+                            </div>
+                        </div>
+                        } @else {
+                        <!-- ── List Formatting Settings ── -->
+                        <!-- List Style Picker -->
+                        <div class="setting-row">
+                            <label>List Style</label>
+                            <div class="list-style-picker-grid">
+                                <button type="button" class="list-style-opt-btn"
+                                    [class.active]="selectedItem.settings.listStyle === 'numbered'"
+                                    (click)="setListStyle(selectedItem, 'numbered')" title="Numbered list (1, 2, 3...)">
+                                    <span class="opt-icon">1.</span>
+                                    <span class="opt-label">Numbered</span>
+                                </button>
+                                <button type="button" class="list-style-opt-btn"
+                                    [class.active]="selectedItem.settings.listStyle === 'bullet'"
+                                    (click)="setListStyle(selectedItem, 'bullet')" title="Bullet list (•)">
+                                    <span class="opt-icon">•</span>
+                                    <span class="opt-label">Bullet</span>
+                                </button>
+                                <button type="button" class="list-style-opt-btn"
+                                    [class.active]="selectedItem.settings.listStyle === 'star'"
+                                    (click)="setListStyle(selectedItem, 'star')" title="Star list (★)">
+                                    <span class="opt-icon">★</span>
+                                    <span class="opt-label">Star</span>
+                                </button>
+                                <button type="button" class="list-style-opt-btn"
+                                    [class.active]="selectedItem.settings.listStyle === 'dash'"
+                                    (click)="setListStyle(selectedItem, 'dash')" title="Dash list (–)">
+                                    <span class="opt-icon">–</span>
+                                    <span class="opt-label">Dash</span>
+                                </button>
+                                <button type="button" class="list-style-opt-btn"
+                                    [class.active]="selectedItem.settings.listStyle === 'custom'"
+                                    (click)="setListStyle(selectedItem, 'custom')" title="Custom icon list">
+                                    <span class="opt-icon">{{ selectedItem.settings.customListIcon || '★' }}</span>
+                                    <span class="opt-label">Custom</span>
+                                </button>
+                            </div>
+                        </div>
+
+                        <!-- Custom Icon Selection -->
+                        @if (selectedItem.settings.listStyle === 'custom') {
+                        <div class="setting-row-group">
+                            <label>Choose Custom Icon</label>
+                            <div class="icon-picker-grid list-custom-icon-grid">
+                                @for (ico of availableIcons; track ico.name) {
+                                <button type="button" class="icon-picker-btn"
+                                    [class.active]="selectedItem.settings.customListIcon === ico.symbol"
+                                    (click)="setCustomListIcon(selectedItem, ico.symbol)" [title]="ico.label">
+                                    <span class="icon-picker-symbol">{{ ico.symbol }}</span>
+                                    <span class="icon-picker-name">{{ ico.name }}</span>
+                                </button>
+                                }
+                            </div>
+                        </div>
+                        }
+
+                        <!-- Bullet / Marker Color -->
+                        <div class="setting-row">
+                            <label>Marker / Accent Color</label>
+                            <div class="color-picker-row">
+                                <input type="color"
+                                    [ngModel]="selectedItem.settings.listColor || selectedItem.settings.lineColor || '#ff1493'"
+                                    (ngModelChange)="selectedItem.settings.listColor = $event; saveState()"
+                                    class="color-picker-input">
+                                <span class="color-hex">{{ selectedItem.settings.listColor ||
+                                    selectedItem.settings.lineColor || '#ff1493' }}</span>
+                            </div>
+                        </div>
+
+                        <!-- Item Spacing -->
+                        <div class="setting-row">
+                            <label>Item Spacing: {{ selectedItem.settings.listSpacing ?? 8 }}px</label>
+                            <input type="range" min="4" max="28" step="2"
+                                [ngModel]="selectedItem.settings.listSpacing ?? 8"
+                                (ngModelChange)="selectedItem.settings.listSpacing = +$event; saveState()"
+                                class="slider-control">
+                        </div>
+
+                        <!-- Font Size -->
+                        <div class="setting-row">
+                            <label>Font Size: {{ selectedItem.settings.listFontSize ?? 16 }}px</label>
+                            <input type="range" min="12" max="32" step="1"
+                                [ngModel]="selectedItem.settings.listFontSize ?? 16"
+                                (ngModelChange)="selectedItem.settings.listFontSize = +$event; saveState()"
+                                class="slider-control">
+                        </div>
+                        }
+                    </div>
+                    }
+
+
+                    <div class="setting-row">
+                        <label>Font Family</label>
+                        <select [ngModel]="selectedItem.settings.fontFamily" (ngModelChange)="setFontFamily($event)"
+                            class="form-select">
+                            <option *ngFor="let f of fontFamilies" [value]="f">{{ f }}</option>
+                        </select>
+                    </div>
+
+                    <!-- Font Size -->
+                    <div class="setting-row">
+                        <label>Font Size: {{ selectedItem.settings.fontSize || 16 }}px</label>
+                        <input type="range" min="10" max="40" [ngModel]="selectedItem.settings.fontSize || 16"
+                            (ngModelChange)="setFontSize($event)" class="slider-control">
+                    </div>
+
+                    <!-- Line Spacing -->
+                    <div class="setting-row">
+                        <label>Line Spacing: {{ selectedItem.settings.lineSpacing }}</label>
+                        <input type="range" min="1" max="3" step="0.1" [ngModel]="selectedItem.settings.lineSpacing"
+                            (ngModelChange)="setLineSpacing($event)" class="slider-control">
+                    </div>
+
+                    <!-- Style Toggles (Bold, Italic, Underline) -->
+                    <div class="setting-row-group">
+                        <label>Text Styles</label>
+                        <div class="btn-group-toggle">
+                            <button (click)="toggleBold()" class="toggle-btn"
+                                [class.active]="selectedItem.settings.bold">B</button>
+                            <button (click)="toggleItalic()" class="toggle-btn italic"
+                                [class.active]="selectedItem.settings.italic">I</button>
+                            <button (click)="toggleUnderline()" class="toggle-btn underline"
+                                [class.active]="selectedItem.settings.underline">U</button>
+                        </div>
+                    </div>
+
+                    <!-- Text Alignment -->
+                    <div class="setting-row-group">
+                        <label>Alignment</label>
+                        <div class="alignment-btn-group">
+                            <button (click)="setAlignment('left')" class="align-btn"
+                                [class.active]="selectedItem.settings.alignment === 'left'" title="Left">
+                                <svg viewBox="0 0 24 24" width="16" height="16">
+                                    <path fill="currentColor"
+                                        d="M3,5H21V7H3V5M3,9H15V11H3V9M3,13H21V15H3V13M3,17H15V19H3V17Z" />
+                                </svg>
+                            </button>
+                            <button (click)="setAlignment('center')" class="align-btn"
+                                [class.active]="selectedItem.settings.alignment === 'center'" title="Center">
+                                <svg viewBox="0 0 24 24" width="16" height="16">
+                                    <path fill="currentColor"
+                                        d="M3,5H21V7H3V5M5,9H19V11H5V9M3,13H21V15H3V13M5,17H19V19H5V17Z" />
+                                </svg>
+                            </button>
+                            <button (click)="setAlignment('right')" class="align-btn"
+                                [class.active]="selectedItem.settings.alignment === 'right'" title="Right">
+                                <svg viewBox="0 0 24 24" width="16" height="16">
+                                    <path fill="currentColor" d="M9,9H21V11H9V9M3,13H21V15H3V13M9,17H21V19H9V17Z" />
+                                </svg>
+                            </button>
+                            <button (click)="setAlignment('justify')" class="align-btn"
+                                [class.active]="selectedItem.settings.alignment === 'justify'" title="Justify">
+                                <svg viewBox="0 0 24 24" width="16" height="16">
+                                    <path fill="currentColor"
+                                        d="M3,5H21V7H3V5M3,9H21V11H3V9M3,13H21V15H3V13M3,17H21V19H3V17Z" />
+                                </svg>
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Colors -->
+                    <div class="setting-row">
+                        <label>Text Color</label>
+                        <div class="color-picker-row">
+                            <input type="color" [ngModel]="selectedItem.settings.color"
+                                (ngModelChange)="setTextColor($event)" class="color-picker-input">
+                            <span class="color-hex">{{ selectedItem.settings.color }}</span>
+                        </div>
+                    </div>
+
+                    <div class="setting-row">
+                        <label>Background Color</label>
+                        <div class="color-picker-row">
+                            <input type="color" [ngModel]="selectedItem.settings.backgroundColor"
+                                (ngModelChange)="setBackgroundColor($event)" class="color-picker-input">
+                            <span class="color-hex">{{ selectedItem.settings.backgroundColor }}</span>
+                        </div>
+                    </div>
+
+                    <!-- Clear Formatting Button -->
+                    <div class="clear-btn-wrapper">
+                        <button class="btn-clear-formatting" (click)="clearFormatting()"
+                            title="Clear Component Formatting">
+                            Clear
+                        </button>
+                    </div>
+
+                    } @else {
+                    <div class="no-selection-indicator">
+                        <svg viewBox="0 0 24 24" width="40" height="40">
+                            <path fill="currentColor"
+                                d="M12,2A10,10 0 0,0 2,12A10,10 0 0,0 12,22A10,10 0 0,0 22,12A10,10 0 0,0 12,2M11,7H13V13H11V7M11,15H13V17H11V15Z" />
+                        </svg>
+                        <p>Select any item inside the Notepad to customize fonts, colors, spacing, and styles.
+                        </p>
+                    </div>
+                    }
+
+                    <!-- Global Counts in body toolbar -->
+                    <div class="global-counts-card">
+                        <h4>Active Editor Statistics</h4>
+                        <div class="stats-row">
+                            <div class="stat-box">
+                                <span class="num">{{ getCounts().charCount }}</span>
+                                <span class="lbl">Characters</span>
+                            </div>
+                            <div class="stat-box">
+                                <span class="num">{{ getCounts().wordCount }}</span>
+                                <span class="lbl">Words</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                }
+                }
+
+            </div>
+        </section>
+
+        <!-- 20% Tabs Navigation Panel -->
+        <section class="panel navigation-panel">
+            <div class="panel-header">
+                <h2>{{ activeTab | titlecase }} Tools</h2>
+            </div>
+
+            <div class="tabs-vertical-list">
+                <button class="nav-tab-btn" [class.active]="activeTab === 'content'" (click)="setTab('content')">
+                    <svg class="tab-icon" viewBox="0 0 24 24" width="24" height="24">
+                        <path fill="currentColor" d="M19,13H13V19H11V13H5V11H11V5H13V11H19V13Z" />
+                    </svg>
+                    <span class="tab-name">Content</span>
+                </button>
+
+                <button class="nav-tab-btn" [class.active]="activeTab === 'block'" (click)="setTab('block')">
+                    <svg class="tab-icon" viewBox="0 0 24 24" width="24" height="24">
+                        <path fill="currentColor"
+                            d="M3,13H11V3H3V13M3,21H11V15H3V21M13,21H21V11H13V21M13,3V9H21V3H13Z" />
+                    </svg>
+                    <span class="tab-name">Block</span>
+                </button>
+
+                <button class="nav-tab-btn" [class.active]="activeTab === 'body'" (click)="setTab('body')">
+                    <svg class="tab-icon" viewBox="0 0 24 24" width="24" height="24">
+                        <path fill="currentColor"
+                            d="M18.5,4L19.66,8.3H24V10H22.75L18.4,20H15.68L14.2,16H9.8L8.32,20H5.6L1.25,10H0V8.3H4.34L5.5,4H18.5M16.32,8.3H7.68L6.84,11.4H17.16L16.32,8.3M13.48,13H10.52L9.4,16H14.6L13.48,13Z" />
+                    </svg>
+                    <span class="tab-name">Body</span>
+                </button>
+            </div>
+        </section>
+
+    </div>
+</div>
+
+<!-- Recursive Item Template Renderer -->
+<ng-template #itemRenderer let-item="item">
+    <div class="renderer-container" [style.font-size.px]="item.settings.fontSize"
+        [style.font-family]="item.settings.fontFamily" [style.color]="item.settings.color"
+        [style.background-color]="item.settings.backgroundColor" [style.text-align]="item.settings.alignment"
+        [style.line-height]="item.settings.lineSpacing" [class.fw-bold]="item.settings.bold"
+        [class.fst-italic]="item.settings.italic" [class.text-decoration-underline]="item.settings.underline">
+
+        @switch (item.type) {
+        @case ('paragraph') {
+        <textarea class="editable-area paragraph-textarea" [(ngModel)]="item.content" cdkTextareaAutosize
+            (click)="selectBlock($event, item.id)" (blur)="saveState()" [style.color]="item.settings.color"
+            [style.background-color]="item.settings.backgroundColor !== 'transparent' ? item.settings.backgroundColor : null"
+            [style.text-align]="item.settings.alignment || 'left'" [style.font-size.px]="item.settings.fontSize"
+            placeholder="Type here..."></textarea>
+        }
+
+        @case ('divide') {
+        <div class="horizontal-divider-container" (click)="selectBlock($event, item.id)">
+            @if (!item.settings.listStyle || item.settings.listStyle === 'none') {
+            <hr class="horizontal-line" [style.border-top-color]="item.settings.lineColor || '#ff1493'"
+                [style.border-top-width.px]="item.settings.lineWidth ?? 2"
+                [style.border-top-style]="item.settings.lineStyle || 'solid'" [style.border-bottom]="'none'"
+                [style.border-left]="'none'" [style.border-right]="'none'" [style.height]="'0'" [style.opacity]="1">
+            } @else {
+            <div class="notepad-list-container" [style.gap.px]="item.settings.listSpacing ?? 8"
+                [style.font-size.px]="item.settings.listFontSize ?? 16"
+                [style.font-family]="item.settings.fontFamily || 'Inter'">
+                @for (listItem of item.listItems || []; track trackByIndex($index); let idx = $index) {
+                <div class="notepad-list-row">
+                    <span class="notepad-list-bullet"
+                        [style.color]="item.settings.listColor || item.settings.lineColor || '#ff1493'"
+                        [style.font-size.px]="(item.settings.listFontSize ?? 16) + (item.settings.listStyle === 'bullet' ? 4 : 0)">
+                        @if (item.settings.listStyle === 'numbered') {
+                        {{ idx + 1 }}.
+                        } @else if (item.settings.listStyle === 'bullet') {
+                        •
+                        } @else if (item.settings.listStyle === 'star') {
+                        ★
+                        } @else if (item.settings.listStyle === 'dash') {
+                        –
+                        } @else if (item.settings.listStyle === 'custom') {
+                        {{ item.settings.customListIcon || '★' }}
+                        }
+                    </span>
+                    <input type="text" [(ngModel)]="item.listItems![idx]" (ngModelChange)="saveState()"
+                        (keydown)="onListItemKeydown($event, item, idx)" class="notepad-list-input"
+                        [style.font-size.px]="item.settings.listFontSize ?? 16"
+                        [style.color]="item.settings.color || '#f1f5f9'"
+                        [style.font-family]="item.settings.fontFamily || 'Inter'"
+                        placeholder="List item {{ idx + 1 }}..." />
+                    <button type="button" class="list-item-delete-btn"
+                        (click)="$event.stopPropagation(); removeListItem(item, idx)" title="Delete item">✕</button>
+                </div>
+                }
+                <div class="notepad-list-actions">
+                    <button type="button" class="list-add-item-btn"
+                        (click)="$event.stopPropagation(); addListItem(item)">
+                        + Add Item
+                    </button>
+                </div>
+            </div>
+            }
+        </div>
+        }
+
+        @case ('heading') {
+        @switch (item.settings.headingLevel) {
+        @case ('h1') { <h1 (click)="selectBlock($event, item.id)" class="editable-area h-element">{{ item.content }}
+        </h1> }
+        @case ('h2') { <h2 (click)="selectBlock($event, item.id)" class="editable-area h-element">{{ item.content }}
+        </h2> }
+        @case ('h3') { <h3 (click)="selectBlock($event, item.id)" class="editable-area h-element">{{ item.content }}
+        </h3> }
+        @case ('h4') { <h4 (click)="selectBlock($event, item.id)" class="editable-area h-element">{{ item.content }}
+        </h4> }
+        @case ('h5') { <h5 (click)="selectBlock($event, item.id)" class="editable-area h-element">{{ item.content }}
+        </h5> }
+        @case ('h6') { <h6 (click)="selectBlock($event, item.id)" class="editable-area h-element">{{ item.content }}
+        </h6> }
+        }
+        }
+        @case ('button') {
+        <div class="button-element-wrapper" [style.text-align]="item.settings.alignment || 'center'">
+            <div class="btn-element" [class]="'btn-color-' + (item.settings.buttonColor || 'red')"
+                [style.font-size.px]="item.settings.fontSize" [style.font-family]="item.settings.fontFamily"
+                [style.color]="item.settings.color && item.settings.color !== '#1e293b' ? item.settings.color : null"
+                [style.background-color]="item.settings.backgroundColor && item.settings.backgroundColor !== 'transparent' ? item.settings.backgroundColor : null"
+                [style.border-radius.px]="item.settings.borderRadius" [style.padding.px]="item.settings.padding"
+                [class.fw-bold]="item.settings.bold" [class.fst-italic]="item.settings.italic"
+                [class.text-decoration-underline]="item.settings.underline">
+                <input type="text" class="btn-text-input" [(ngModel)]="item.content"
+                    (click)="selectBlock($event, item.id)" (blur)="saveState()"
+                    [style.font-size.px]="item.settings.fontSize" [style.font-family]="item.settings.fontFamily"
+                    [style.text-align]="item.settings.alignment || 'center'" placeholder="Button text...">
+            </div>
+        </div>
+        }
+
+        @case ('icon') {
+        <div class="icon-element-wrapper" (click)="selectBlock($event, item.id)"
+            [class.align-left]="item.settings.alignment === 'left'"
+            [class.align-center]="!item.settings.alignment || item.settings.alignment === 'center'"
+            [class.align-right]="item.settings.alignment === 'right'"
+            [class.align-justify]="item.settings.alignment === 'justify'"
+            [style.text-align]="item.settings.alignment || 'center'" [style.width.%]="item.settings.iconWidth || 100"
+            [style.margin]="(item.settings.alignment === 'left') ? '0 auto 0 0' : (item.settings.alignment === 'right') ? '0 0 0 auto' : '0 auto'">
+            <span class="icon-symbol-display" [style.font-size.px]="item.settings.iconSize || 36"
+                [style.font-weight]="item.settings.iconWeight || 700" [style.color]="item.settings.color || '#ff1493'"
+                [style.background-color]="item.settings.backgroundColor !== 'transparent' ? item.settings.backgroundColor : 'transparent'"
+                [class.fw-bold]="item.settings.bold" [class.fst-italic]="item.settings.italic"
+                [class.text-decoration-underline]="item.settings.underline">
+                {{ item.content }}
+            </span>
+        </div>
+        }
+
+        @case ('divider') {
+        <div class="divider-wrapper" [class.is-column-block]="item.settings.isColumnBlock">
+
+            <!-- Column Layout Row — text and input fields only -->
+            <div [class]="'divider-element-row divider-' + (item.settings.dividerLayout || '50-50')"
+                [class.is-column-block]="item.settings.isColumnBlock">
+                @for (sec of item.sections; track sec.id; let idx = $index) {
+                <div class="divider-section-column">
+
+                    <div [id]="sec.id" cdkDropList [cdkDropListData]="sec.items"
+                        [cdkDropListConnectedTo]="getConnectedListIds()" (cdkDropListDropped)="onDrop($event)"
+                        class="section-drop-zone">
+
+                        @for (subItem of sec.items; track subItem.id) {
+                        <div cdkDrag [cdkDragData]="subItem" class="notepad-item-wrapper"
+                            [class.selected]="selectedBlockId === subItem.id" (click)="selectBlock($event, subItem.id)">
+
+                            <!-- Drag placeholder -->
+                            <div class="cdk-drag-placeholder" *cdkDragPlaceholder></div>
+
+                            <!-- Nested element controls -->
+                            @if (selectedBlockId === subItem.id) {
+                            <div class="item-toolbar">
+                                <div class="drag-handle" cdkDragHandle>
+                                    <svg viewBox="0 0 24 24" width="12" height="12">
+                                        <path fill="currentColor"
+                                            d="M10,4A2,2 0 0,1 12,6A2,2 0 0,1 10,8A2,2 0 0,1 8,6A2,2 0 0,1 10,4M14,4A2,2 0 0,1 16,6A2,2 0 0,1 14,8A2,2 0 0,1 12,6A2,2 0 0,1 14,4M10,10A2,2 0 0,1 12,12A2,2 0 0,1 10,14A2,2 0 0,1 8,12A2,2 0 0,1 10,10M14,10A2,2 0 0,1 16,12A2,2 0 0,1 14,14A2,2 0 0,1 12,12A2,2 0 0,1 14,10M10,16A2,2 0 0,1 12,18A2,2 0 0,1 10,20A2,2 0 0,1 8,18A2,2 0 0,1 10,16M14,16A2,2 0 0,1 16,18A2,2 0 0,1 14,20A2,2 0 0,1 12,18A2,2 0 0,1 14,16Z" />
+                                    </svg>
+                                </div>
+                                <span class="item-type-tag mini">{{ subItem.type }}</span>
+                                <button class="delete-btn mini" (click)="deleteBlock($event, subItem.id)">
+                                    <svg viewBox="0 0 24 24" width="12" height="12">
+                                        <path fill="currentColor"
+                                            d="M19,4H15.5L14.5,3H9.5L8.5,4H5V6H19M6,19A2,2 0 0,0 8,21H16A2,2 0 0,0 18,19V7H6V19Z" />
+                                    </svg>
+                                </button>
+                            </div>
+                            }
+
+                            <ng-container *ngTemplateOutlet="itemRenderer; context: { item: subItem }"></ng-container>
+                        </div>
+                        }
+
+                        @if (sec.items.length === 0) {
+                        <div class="section-empty-placeholder" (click)="ensureSectionEditable(sec, $event)">
+                            <span>Click to start writing</span>
+                            <p class="desc">Type words, sentences or paragraphs</p>
+                        </div>
+                        }
+                    </div>
+                </div>
+                }
+            </div>
+        </div>
+        }
+
+        @case ('image') {
+        <div class="image-element-container">
+            @if (item.content) {
+            <img [src]="item.content" alt="Notepad Image" class="responsive-image"
+                [style.width.%]="item.settings.imageWidth" [style.max-height.px]="item.settings.imageHeight"
+                [style.border-width.px]="item.settings.imageBorderWidth"
+                [style.border-style]="item.settings.imageBorderWidth ? 'solid' : 'none'"
+                [style.border-color]="item.settings.color">
+            } @else {
+            <div class="image-placeholder">
+                <svg viewBox="0 0 24 24" width="36" height="36">
+                    <path fill="currentColor"
+                        d="M19,19H5V5H19M19,3H5A2,2 0 0,0 3,5V19A2,2 0 0,0 5,21H19A2,2 0 0,0 21,19V5A2,2 0 0,0 19,3M13.96,12.29L11.21,15.83L9.25,13.47L6.5,17H17.5L13.96,12.29Z" />
+                </svg>
+                <span>No image selected</span>
+            </div>
+            }
+
+            <!-- Image controls overlay when selected -->
+            @if (selectedBlockId === item.id) {
+            <div class="image-upload-toolbar" (click)="$event.stopPropagation()">
+                <label class="btn-upload">
+                    Upload Image
+                    <input type="file" (change)="handleImageUpload($event, item)" accept="image/*"
+                        class="file-input-hidden">
+                </label>
+
+                <div class="slider-group">
+                    <label>Width: {{ item.settings.imageWidth }}%</label>
+                    <input type="range" min="10" max="100" [ngModel]="item.settings.imageWidth"
+                        (ngModelChange)="item.settings.imageWidth = $event; saveState()">
+                </div>
+                <div class="slider-group">
+                    <label>Height: {{ item.settings.imageHeight }}px</label>
+                    <input type="range" min="50" max="600" [ngModel]="item.settings.imageHeight"
+                        (ngModelChange)="item.settings.imageHeight = $event; saveState()">
+                </div>
+                <div class="slider-group">
+                    <label>Border: {{ item.settings.imageBorderWidth }}px</label>
+                    <input type="range" min="0" max="20" [ngModel]="item.settings.imageBorderWidth"
+                        (ngModelChange)="item.settings.imageBorderWidth = $event; saveState()">
+                </div>
+            </div>
+            }
+        </div>
+        }
+
+        @case ('social') {
+        <div class="social-element-wrapper" (click)="selectBlock($event, item.id)"
+            [class.align-left]="item.settings.alignment === 'left'"
+            [class.align-center]="!item.settings.alignment || item.settings.alignment === 'center'"
+            [class.align-right]="item.settings.alignment === 'right'"
+            [class.align-justify]="item.settings.alignment === 'justify'"
+            [style.text-align]="item.settings.alignment || 'center'">
+            <div class="social-icons-group" [style.gap.px]="item.settings.socialGap || 16"
+                [style.justify-content]="item.settings.alignment === 'left' ? 'flex-start' : item.settings.alignment === 'right' ? 'flex-end' : item.settings.alignment === 'justify' ? 'space-between' : 'center'">
+
+                <!-- Google Brand Icon & Link -->
+                <a [href]="item.content.google || 'https://www.google.com'" target="_blank"
+                    class="social-icon-btn google-btn" [class.with-text]="item.settings.showGoogleLinkText"
+                    [style.height.px]="(item.settings.socialIconSize || 34) + 14"
+                    [style.min-width.px]="(item.settings.socialIconSize || 34) + 14"
+                    [title]="item.content.googleText || 'Google'">
+                    <svg [attr.width]="item.settings.socialIconSize || 34"
+                        [attr.height]="item.settings.socialIconSize || 34" viewBox="0 0 48 48"
+                        xmlns="http://www.w3.org/2000/svg">
+                        <path fill="#EA4335"
+                            d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z" />
+                        <path fill="#4285F4"
+                            d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z" />
+                        <path fill="#FBBC05"
+                            d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z" />
+                        <path fill="#34A853"
+                            d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z" />
+                        <path fill="none" d="M0 0h48v48H0z" />
+                    </svg>
+                    @if (item.settings.showGoogleLinkText) {
+                    <span class="social-btn-text"
+                        [style.font-size.px]="(item.settings.socialIconSize || 34) * 0.42 + 4">
+                        {{ item.content.googleText || 'Google' }}
+                    </span>
+                    }
+                </a>
+
+                <!-- WhatsApp Real Brand Icon & Link -->
+                <a [href]="item.content.whatsapp || 'https://wa.me/'" target="_blank"
+                    class="social-icon-btn whatsapp-btn" [class.with-text]="item.settings.showWhatsappLinkText"
+                    [style.height.px]="(item.settings.socialIconSize || 34) + 14"
+                    [style.min-width.px]="(item.settings.socialIconSize || 34) + 14"
+                    [title]="item.content.whatsappText || 'WhatsApp'">
+                    <svg [attr.width]="item.settings.socialIconSize || 34"
+                        [attr.height]="item.settings.socialIconSize || 34" viewBox="0 0 48 48" fill="none"
+                        xmlns="http://www.w3.org/2000/svg">
+                        <path
+                            d="M24 4C12.954 4 4 12.954 4 24C4 27.614 4.972 31.003 6.67 33.924L4.07 43.93L14.338 41.379C17.165 42.893 20.385 43.75 23.806 43.75C35.17 43.75 44 35.046 44 24C44 12.954 35.046 4 24 4Z"
+                            fill="white" />
+                        <path
+                            d="M35.176 30.007C34.727 31.23 32.741 32.313 31.723 32.481C30.805 32.631 29.638 32.697 28.356 32.277C27.573 32.022 26.574 31.685 25.29 31.122C20.073 28.862 16.674 23.563 16.413 23.216C16.152 22.869 14.229 20.311 14.229 17.666C14.229 15.021 15.668 13.722 16.199 13.147C16.73 12.572 17.348 12.434 17.706 12.434C18.064 12.434 18.422 12.437 18.736 12.453C19.067 12.47 19.516 12.332 19.959 13.411C20.413 14.52 21.526 17.166 21.66 17.427C21.795 17.688 21.884 17.992 21.705 18.34C21.526 18.688 21.437 18.905 21.176 19.21C20.915 19.514 20.628 19.888 20.391 20.126C20.13 20.387 19.859 20.669 20.165 21.201C20.471 21.733 21.514 23.44 23.064 24.822C25.065 26.602 26.756 27.155 27.287 27.416C27.818 27.677 28.131 27.633 28.437 27.285C28.742 26.937 29.74 25.766 30.09 25.234C30.44 24.703 30.793 24.79 31.279 24.964C31.766 25.138 34.402 26.44 34.933 26.701C35.464 26.962 35.822 27.093 35.957 27.32C36.091 27.547 36.091 28.57 35.643 29.793L35.176 30.007Z"
+                            fill="#25D366" />
+                    </svg>
+                    @if (item.settings.showWhatsappLinkText) {
+                    <span class="social-btn-text"
+                        [style.font-size.px]="(item.settings.socialIconSize || 34) * 0.42 + 4">
+                        {{ item.content.whatsappText || 'WhatsApp' }}
+                    </span>
+                    }
+                </a>
+
+                <!-- Instagram Real Brand Icon & Link -->
+                <a [href]="item.content.instagram || 'https://instagram.com/'" target="_blank"
+                    class="social-icon-btn instagram-btn" [class.with-text]="item.settings.showInstagramLinkText"
+                    [style.height.px]="(item.settings.socialIconSize || 34) + 14"
+                    [style.min-width.px]="(item.settings.socialIconSize || 34) + 14"
+                    [title]="item.content.instagramText || 'Instagram'">
+                    <svg [attr.width]="item.settings.socialIconSize || 34"
+                        [attr.height]="item.settings.socialIconSize || 34" viewBox="0 0 48 48"
+                        xmlns="http://www.w3.org/2000/svg">
+                        <defs>
+                            <radialGradient [attr.id]="'ig-grad-' + item.id" cx="30%" cy="107%" r="150%">
+                                <stop offset="0%" stop-color="#ffd600" />
+                                <stop offset="30%" stop-color="#ff6930" />
+                                <stop offset="60%" stop-color="#e3178d" />
+                                <stop offset="100%" stop-color="#4267B2" />
+                            </radialGradient>
+                        </defs>
+                        <rect width="48" height="48" rx="12" [attr.fill]="'url(#ig-grad-' + item.id + ')'" />
+                        <path
+                            d="M30 8H18C12.477 8 8 12.477 8 18V30C8 35.523 12.477 40 18 40H30C35.523 40 40 35.523 40 30V18C40 12.477 35.523 8 30 8ZM37.5 30C37.5 34.135 34.135 37.5 30 37.5H18C13.865 37.5 10.5 34.135 10.5 30V18C10.5 13.865 13.865 10.5 18 10.5H30C34.135 10.5 37.5 13.865 37.5 18V30Z"
+                            fill="white" />
+                        <path
+                            d="M24 16C19.582 16 16 19.582 16 24C16 28.418 19.582 32 24 32C28.418 32 32 28.418 32 24C32 19.582 28.418 16 24 16ZM24 29.5C20.967 29.5 18.5 27.033 18.5 24C18.5 20.967 20.967 18.5 24 18.5C27.033 18.5 29.5 20.967 29.5 24C29.5 27.033 27.033 29.5 24 29.5Z"
+                            fill="white" />
+                        <circle cx="33" cy="15" r="2.5" fill="white" />
+                    </svg>
+                    @if (item.settings.showInstagramLinkText) {
+                    <span class="social-btn-text"
+                        [style.font-size.px]="(item.settings.socialIconSize || 34) * 0.42 + 4">
+                        {{ item.content.instagramText || 'Instagram' }}
+                    </span>
+                    }
+                </a>
+
+                <!-- Facebook Real Brand Icon & Link -->
+                <a [href]="item.content.facebook || 'https://facebook.com/'" target="_blank"
+                    class="social-icon-btn facebook-btn" [class.with-text]="item.settings.showFacebookLinkText"
+                    [style.height.px]="(item.settings.socialIconSize || 34) + 14"
+                    [style.min-width.px]="(item.settings.socialIconSize || 34) + 14"
+                    [title]="item.content.facebookText || 'Facebook'">
+                    <svg [attr.width]="item.settings.socialIconSize || 34"
+                        [attr.height]="item.settings.socialIconSize || 34" viewBox="0 0 48 48" fill="none"
+                        xmlns="http://www.w3.org/2000/svg">
+                        <path
+                            d="M48 24C48 10.745 37.255 0 24 0C10.745 0 0 10.745 0 24C0 35.979 8.776 45.902 20.25 47.709V30.938H14.156V24H20.25V18.712C20.25 12.696 23.832 9.375 29.315 9.375C31.941 9.375 34.688 9.844 34.688 9.844V15.75H31.661C28.68 15.75 27.75 17.6 27.75 19.5V24H34.406L33.337 30.938H27.75V47.709C39.224 45.902 48 35.979 48 24Z"
+                            fill="#1877F2" />
+                        <path
+                            d="M33.337 30.938L34.406 24H27.75V19.5C27.75 17.601 28.68 15.75 31.661 15.75H34.688V9.844C34.688 9.844 31.942 9.375 29.315 9.375C23.833 9.375 20.25 12.696 20.25 18.712V24H14.156V30.938H20.25V47.709C21.478 47.9 22.727 48 24 48C25.273 48 26.522 47.9 27.75 47.709V30.938H33.337Z"
+                            fill="white" />
+                    </svg>
+                    @if (item.settings.showFacebookLinkText) {
+                    <span class="social-btn-text"
+                        [style.font-size.px]="(item.settings.socialIconSize || 34) * 0.42 + 4">
+                        {{ item.content.facebookText || 'Facebook' }}
+                    </span>
+                    }
+                </a>
+
+            </div>
+        </div>
+        }
+
+        @case ('draw') {
+        <div class="draw-element-wrapper" (click)="selectBlock($event, item.id)"
+            [class.is-selected]="selectedBlockId === item.id">
+            <div class="draw-canvas-container">
+                <!-- Drawing Toolbar overlay (shown when selected) -->
+                @if (selectedBlockId === item.id) {
+                <div class="draw-mini-toolbar" (click)="$event.stopPropagation()">
+                    <button class="draw-mini-btn" [class.active]="(item.settings.drawTool || 'pen') === 'pen'"
+                        (click)="setDrawTool('pen')" title="Pen">🖊 Pen</button>
+                    <button class="draw-mini-btn" [class.active]="item.settings.drawTool === 'brush'"
+                        (click)="setDrawTool('brush')" title="Brush">🖌 Brush</button>
+                    <button class="draw-mini-btn" [class.active]="item.settings.drawTool === 'eraser'"
+                        (click)="setDrawTool('eraser')" title="Eraser">⬜ Eraser</button>
+                    <input type="color" [ngModel]="item.settings.drawColor || '#ff1493'"
+                        (ngModelChange)="setDrawColor($event)" class="draw-color-mini" title="Pen color">
+                    <span class="draw-mini-label">{{ item.settings.drawThickness || 3 }}px</span>
+                    <input type="range" min="1" max="50" step="1" [ngModel]="item.settings.drawThickness || 3"
+                        (ngModelChange)="setDrawThickness($event)" class="draw-mini-slider">
+                    <button class="draw-mini-btn" (click)="undoDraw(item)" [disabled]="!canUndoDraw(item)"
+                        title="Undo">↩</button>
+                    <button class="draw-mini-btn" (click)="redoDraw(item)" [disabled]="!canRedoDraw(item)"
+                        title="Redo">↪</button>
+                    <button class="draw-mini-btn danger" (click)="clearDraw(item)" title="Clear">🗑</button>
+                </div>
+                }
+                <!-- The Canvas -->
+                <canvas [id]="'draw-canvas-' + item.id" class="draw-canvas"
+                    [style.width.%]="item.settings.drawCanvasWidth || 100"
+                    [style.height.px]="item.settings.drawHeight || 160"
+                    [attr.width]="(item.settings.drawCanvasWidth || 100) * 12"
+                    [attr.height]="(item.settings.drawHeight || 160) * 2"
+                    [style.cursor]="item.settings.drawTool === 'eraser' ? 'cell' : item.settings.drawTool === 'brush' ? 'url(data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 width=%2724%27 height=%2724%27 viewBox=%270 0 24 24%27%3E%3Ctext y=%2220%27 font-size=%2718%27%3E%F0%9F%96%8C%3C/text%3E%3C/svg%3E) 0 20, crosshair' : 'crosshair'"
+                    (mousedown)="startDraw($event, item)" (mousemove)="continueDraw($event, item)"
+                    (mouseup)="stopDraw(item)" (mouseleave)="stopDraw(item)" (touchstart)="startDraw($event, item)"
+                    (touchmove)="continueDraw($event, item)" (touchend)="stopDraw(item)">
+                </canvas>
+                @if (!item.content) {
+                <div class="draw-placeholder">
+                    <svg viewBox="0 0 24 24" width="28" height="28">
+                        <path fill="currentColor"
+                            d="M9.75 20.85c1.78-.7 1.39-2.63.49-3.85-.49-.68-1.07-1.32-1.68-1.92-.43-.43-.86-.84-1.24-1.29C6.87 13.16 6.5 12.58 6.5 12c0-.59.4-1.11.88-1.48.61-.47 1.37-.71 2.12-.71.66 0 1.32.18 1.86.5l.6-.87c-.83-.53-1.75-.8-2.7-.78C7.74 8.64 6.5 9.5 5.97 10.76c-.19.46-.28.94-.28 1.43.01.84.4 1.63.97 2.3.42.5.88.96 1.35 1.41.47.46.95.93 1.36 1.47.46.6.6 1.29.26 1.79-.3.45-.9.64-1.47.64-1.06 0-2.05-.5-2.73-1.23l-.63.82c.86.87 2.07 1.41 3.39 1.41 1.23.01 2.5-.6 3.05-1.95M19 4l-1-1-8.14 8.14.63.63.63.63L19 4m-6.36 11.95l1.04 1.04L21 9.64 19.95 8.6l-7.31 7.35z" />
+                    </svg>
+                    <p>Click and drag to draw</p>
+                </div>
+                }
+            </div>
+        </div>
+        }
+
+
+        }
+    </div>
+</ng-template>
